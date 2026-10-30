@@ -34,4 +34,14 @@ export interface ActionItem {
   competitorId: string | null; competitorName: string | null; signalId: string | null; signalTitle: string | null; reportId: string | null; reportTitle: string | null;
   createdAt: string; completedAt: string | null;
 }
-export interface AiInfo { provider: string; configured: boolean; model: string; problem: string | null }
+export interface AiInfo {
+  provider: string;
+  configured: boolean;
+  model: string;
+  workflow: 'single' | 'multi_agent';
+  isLocal: boolean;
+  isFree: boolean;
+  problem: string | null;
+  roleModels?: { analyst?: string; strategist?: string; critic?: string; synthesizer?: string };
+}
+

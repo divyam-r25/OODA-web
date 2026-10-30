@@ -3,6 +3,7 @@ import type { ReportContent, SourceConsidered } from '../../shared/report.ts';
 import { type EvidenceRef, OutputError, extractJson, validateAnalysis } from '../ai/analysis.ts';
 import { AiError } from '../ai/provider.ts';
 import { type PromptEvidence, SYSTEM_PROMPT, buildUserPrompt } from '../ai/prompts.ts';
+import { executeMultiAgentWorkflow } from '../ai/multiAgent.ts';
 import { FetchError } from '../collect/net.ts';
 import { assertRobotsAllowed } from '../collect/robots.ts';
 import { safeFetch } from '../collect/safeFetch.ts';
@@ -143,34 +144,64 @@ export async function executeRun(svc: Services, runId: string, attempt: number):
         ...(e.diff_json && changed ? { diff: { ...JSON.parse(e.diff_json), since: prevRow?.fetched_at.slice(0, 10) } } : {}),
       };
     });
-    const { prompt, truncatedRefs } = buildUserPrompt({
-      company: { ...loadProfile(db, uid), name: loadProfile(db, uid).companyName }, competitor, focus: run.focus, evidence: promptEvidence,
-    });
+    const promptCtx = {
+      company: { ...loadProfile(db, uid), name: loadProfile(db, uid).companyName },
+      competitor,
+      focus: run.focus,
+      evidence: promptEvidence,
+    };
+    const { prompt, truncatedRefs } = buildUserPrompt(promptCtx);
     let validated: ReturnType<typeof validateAnalysis> | null = null;
     let lastProblem = '';
-    for (let tryNo = 1; tryNo <= 2 && !validated; tryNo++) {
-      checkCancel();
-      setStage(db, runId, tryNo === 1 ? 'analyzing' : 'validating_output', tryNo === 1 ? 65 : 80);
+
+    if (config.ai.workflow === 'multi_agent') {
       try {
-        const raw = await ai.generate(SYSTEM_PROMPT, tryNo === 1 ? prompt : `${prompt}\n\nYour previous reply was rejected: ${lastProblem}\nReturn ONLY one valid JSON object that follows the schema.`);
-        setStage(db, runId, 'validating_output', 82);
-        validated = validateAnalysis(extractJson(raw), refs);
+        validated = await executeMultiAgentWorkflow(ai, promptCtx, prompt, refs, {
+          checkCancel,
+          log: (lvl, stg, msg) => log(lvl, stg, msg),
+        });
       } catch (e) {
-        if (e instanceof OutputError) {
-          lastProblem = e.message;
-          log('warn', 'validating_output', `Model output rejected: ${e.message}${tryNo === 1 ? ' Retrying once.' : ''}`);
-        } else if (e instanceof AiError && e.retryable && attempt < config.worker.maxAttempts) {
+        if (e instanceof AiError && e.retryable && attempt < config.worker.maxAttempts) {
           throw new RetryableError(e.message);
         } else if (e instanceof AiError) {
           finishRun(db, runId, 'partial', `Evidence was collected, but analysis failed: ${e.message}`);
           log('error', 'analyzing', e.message);
           return;
-        } else throw e;
+        } else if (e instanceof OutputError) {
+          finishRun(db, runId, 'partial', `Evidence was collected, but multi-agent analysis could not be validated: ${e.message}`);
+          log('error', 'analyzing', e.message);
+          return;
+        } else {
+          throw e;
+        }
       }
-    }
-    if (!validated) {
-      finishRun(db, runId, 'partial', `Evidence was collected, but the model's output could not be validated (${lastProblem}).`);
-      return;
+    } else {
+      // Single-agent workflow
+      log('info', 'analyzing', 'Single-agent analyst evaluating evidence...');
+      for (let tryNo = 1; tryNo <= 2 && !validated; tryNo++) {
+        checkCancel();
+        setStage(db, runId, tryNo === 1 ? 'analyzing' : 'validating_output', tryNo === 1 ? 65 : 80);
+        try {
+          const raw = await ai.generate(SYSTEM_PROMPT, tryNo === 1 ? prompt : `${prompt}\n\nYour previous reply was rejected: ${lastProblem}\nReturn ONLY one valid JSON object that follows the schema.`);
+          setStage(db, runId, 'validating_output', 82);
+          validated = validateAnalysis(extractJson(raw), refs);
+        } catch (e) {
+          if (e instanceof OutputError) {
+            lastProblem = e.message;
+            log('warn', 'validating_output', `Model output rejected: ${e.message}${tryNo === 1 ? ' Retrying once.' : ''}`);
+          } else if (e instanceof AiError && e.retryable && attempt < config.worker.maxAttempts) {
+            throw new RetryableError(e.message);
+          } else if (e instanceof AiError) {
+            finishRun(db, runId, 'partial', `Evidence was collected, but analysis failed: ${e.message}`);
+            log('error', 'analyzing', e.message);
+            return;
+          } else throw e;
+        }
+      }
+      if (!validated) {
+        finishRun(db, runId, 'partial', `Evidence was collected, but the model's output could not be validated (${lastProblem}).`);
+        return;
+      }
     }
 
     // ── Persist ────────────────────────────────────────────────────────

@@ -1,112 +1,161 @@
 # OODA
 
-Competitive intelligence for founders and product teams. OODA watches the public pages of the companies you compete with, shows what changed, and turns it into evidence-backed reports and trackable actions, following the **Observe, Orient, Decide, Act** loop.
+Competitive intelligence for founders and product teams. OODA watches public competitor pages, captures dated snapshots, highlights changes line-by-line, and synthesizes evidence-backed reports and trackable actions following the **Observe, Orient, Decide, Act** loop.
 
-OODA is a responsive web application (desktop, tablet and phone browsers) with its own backend.
+---
 
-## What it does
+## Strict Zero-Cost AI Policy (₹0 / $0 Budget)
 
-- **Observe.** Collects the pages you choose (pricing, product, careers) with a polite, SSRF-safe fetcher that respects `robots.txt`, and stores dated snapshots.
-- **Orient.** Compares each snapshot with the previous one line by line and produces signals with a severity, a confidence, and the exact lines that moved.
-- **Decide.** Writes a memo in which every statement is labelled as a *fact* (with a quote verified against the stored page), an *interpretation* (cites sources), or a *hypothesis* (flagged as unsupported). Reports can be reopened, compared across competitors, and exported.
-- **Act.** Turns recommendations and signals into tracked actions.
+OODA is built to operate under a strict **₹0 / $0 budget** without requiring any paid subscriptions, credit card entries, or billing accounts.
 
-Honesty rules enforced in code, not just in prompts: every citation is checked against stored evidence; unverifiable quotes are downgraded; a first run is a "baseline" and never claims change; pages that could not be collected are listed as limitations; with no AI provider configured, no analysis is invented.
+- **No paid API dependencies**: Runs either genuinely locally via Ollama or via hosted free-tier providers.
+- **No silent paid fallbacks**: If a free-tier quota is reached, OODA terminates the analysis cleanly, preserves all collected evidence, and marks the run as **Partial** with an informative message. It will **never** automatically bill or fall back to a paid model.
+- **Guaranteed Free Model Enforcement**: In OpenRouter Free mode, only models ending with `:free` (or `openrouter/free`) are allowed. Any paid model is rejected at configuration time.
 
-## Quick start
+---
 
-Requires **Node.js 22.13 or newer** (uses the built-in `node:sqlite`).
+## Zero-Cost AI Modes
+
+### Mode A: Local Ollama (Unlimited Private Local Inference)
+
+Recommended for local development and private servers. Truly unlimited, offline, private, and 100% free.
+
+1. **Install Ollama**:
+   - macOS / Linux: `curl -fsSL https://ollama.com/install.sh | sh`
+   - Windows: Download from [ollama.com](https://ollama.com).
+2. **Download a model**:
+   ```bash
+   ollama pull llama3.2
+   ```
+3. **Verify Ollama is running**:
+   ```bash
+   ollama serve
+   ```
+4. **Configure `.env`**:
+   ```env
+   AI_PROVIDER=ollama
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   OLLAMA_MODEL=llama3.2
+   ```
+
+> [!IMPORTANT]
+> **Cloud / Render Notice**: `127.0.0.1` on cloud hosting (such as Render) refers to the host container itself, **not** your personal computer. Local PC Ollama is not accessible from Render unless you host an Ollama instance with a public reverse proxy. For Render deployments, use **Mode B (OpenRouter Free)** below.
+
+---
+
+### Mode B: OpenRouter Free (Zero-Cost Cloud & Render Deployments)
+
+Designed for public cloud deployments like Render without local hardware.
+
+1. **Get a free OpenRouter API key**:
+   - Sign up at [openrouter.ai](https://openrouter.ai).
+   - Generate a key at [openrouter.ai/keys](https://openrouter.ai/keys) (No credit card or payment info required).
+2. **Select a free model** (must end in `:free` or match `openrouter/free`):
+   - `nvidia/nemotron-3-ultra-550b-a55b:free` (Default)
+   - `meta-llama/llama-3.3-70b-instruct:free`
+   - `google/gemini-2.0-flash-exp:free`
+   - `openrouter/free`
+3. **Configure `.env` (or Render Environment Variables)**:
+   ```env
+   AI_PROVIDER=openrouter_free
+   OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+   OPENROUTER_API_KEY=your_openrouter_free_key_here
+   OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+   ```
+
+> [!NOTE]
+> **Free-Tier Limits & Quota Handling**:
+> Free models on OpenRouter are shared community resources. Rate limits and availability vary based on provider capacity. When free quota or rate limits are reached (HTTP 429/402), OODA saves all gathered evidence safely and pauses the run with a clear message. You can retry the run later without risk of charges.
+
+> [!WARNING]
+> **Data Privacy Notice**:
+> When using hosted third-party free endpoints, do not submit confidential, private, or proprietary documents without first reviewing the provider's data logging policies. For strictly confidential research, use **Mode A (Local Ollama)**.
+
+---
+
+## Workflow Modes: Single vs Multi-Agent
+
+Configure the analysis workflow via `AI_WORKFLOW` in `.env`:
+
+```env
+AI_WORKFLOW=single        # "single" (default) or "multi_agent"
+```
+
+### 1. Single-Agent Mode (`AI_WORKFLOW=single`)
+Executes a single, tightly-constrained model prompt that produces the structured findings, signals, and recommendations in one pass. Ideal for minimal latency and strict API rate limits.
+
+### 2. Multi-Agent Pipeline (`AI_WORKFLOW=multi_agent`)
+Executes four sequential logical roles using your configured free model:
+
+```
+[Collected Evidence] 
+        │
+        ▼
+1. Research Analyst   ── Extracts verifiable facts with exact quotes & citations (E1, E2...).
+        │
+        ▼
+2. Strategy Analyst   ── Evaluates implications, opportunities, threats & recommendations.
+        │
+        ▼
+3. Skeptical Reviewer ── Audits claims against evidence; challenges unquoted facts or false changes.
+        │
+        ▼
+4. Lead Synthesizer   ── Resolves conflicts conservatively into the verified OODA report schema.
+        │
+        ▼
+[Validated Report]
+```
+
+- **Sequential Execution**: Agents run sequentially to conserve memory and stay within rate limits.
+- **Adversarial Quality Control**: The Skeptical Reviewer independent audit challenges unverified quotes, false claims of historical change on baseline pages, and hallucinations.
+- **Role-Specific Models (Optional)**:
+  You can optionally assign custom models per role:
+  ```env
+  OPENROUTER_ANALYST_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+  OPENROUTER_STRATEGIST_MODEL=meta-llama/llama-3.3-70b-instruct:free
+  OPENROUTER_CRITIC_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+  OPENROUTER_SYNTHESIS_MODEL=meta-llama/llama-3.3-70b-instruct:free
+  ```
+
+---
+
+## Quick Start
+
+Requires **Node.js 22.13 or newer** (uses built-in `node:sqlite`).
 
 ```bash
 npm install
-# PowerShell: Copy-Item .env.example .env
-# macOS/Linux: cp .env.example .env
-# Then edit .env to choose an AI provider (see below).
+# Copy .env.example to .env
+# Windows PowerShell: Copy-Item .env.example .env
+# macOS / Linux:      cp .env.example .env
 npm run build
 npm start                   # http://127.0.0.1:8787
 ```
 
-Development with rebuild-on-change and server restart:
-
+Development with live rebuild and auto-restarting server:
 ```bash
 npm run dev
 ```
 
-`npm run dev` creates an initial build, watches the TypeScript, React and CSS sources, and restarts the Node server whenever the backend bundle changes. It serves the same compiled frontend and API from one origin at `http://127.0.0.1:8787`; do not open the `web/` directory directly.
-
-Open the site, choose **Create a workspace**, add a competitor, and press **Research now**.
-
-### Choosing an analysis provider
-
-Set `AI_PROVIDER` in `.env`:
-
-| Provider | Needed variables |
-|---|---|
-| `ollama` (local, private) | `OLLAMA_MODEL`, optionally `OLLAMA_BASE_URL` |
-| `openai` (or any OpenAI-compatible API) | `OPENAI_API_KEY`, `OPENAI_MODEL`, optionally `OPENAI_BASE_URL` |
-| `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
-| `none` (default) | nothing. Pages are collected and saved; no reports are written |
-
-Keys stay in the server environment. The Settings page shows whether a provider is connected but never any secret.
+---
 
 ## Commands
 
-| Command | What it does |
+| Command | Description |
 |---|---|
-| `npm run build` | Bundles the server to `dist/server/` and the web app to `dist/web/` |
-| `npm start` | Runs the production build (loads `.env`) |
-| `npm run dev` | Dev mode: rebuilds the web bundle and restarts the server on change |
-| `npm run typecheck` | `tsc --noEmit` over shared, server, web, tests |
-| `npm test` | Runs the checked-in Node/TypeScript tests. (The repository currently contains no test files.) |
-| `npm run test:e2e` | Legacy Playwright command; it requires a `tests/e2e/run.mjs` file, which is not included in this checkout. |
-| `npm run check` | typecheck, then tests, then build |
+| `npm run dev` | Dev server with watch mode and auto-restart |
+| `npm run build` | Bundles server (`dist/server/`) and web app (`dist/web/`) |
+| `npm start` | Runs production server (reads `.env`) |
+| `npm run typecheck` | Strict `tsc --noEmit` across shared, server, web, and tests |
+| `npm test` | Runs the full test suite including zero-cost AI & multi-agent tests |
+| `npm run test:e2e` | Runs E2E sanity check against live HTTP server |
+| `npm run check` | Runs typecheck, tests, and build |
 
-## Repository layout
+---
 
-```
-shared/    validation library and report types shared by server and web
-server/    HTTP API, SQLite, auth, research pipeline, queue and worker, AI adapters, collection
-web/       React 19 + TypeScript single-page app, bundled with esbuild
-```
+## Evidence Correctness & Security Safeguards
 
-## Health check
-
-`GET /api/health` returns database, worker and provider status without authentication.
-
-## Production deployment
-
-Build and run this as a single Node.js 22.13+ service. The build command is `npm run build`; the start command is `npm start`. The server serves `dist/web/` itself and exposes the API at the same origin under `/api/`, so no frontend deployment, reverse-proxy rewrite, or browser-visible environment variables are needed.
-
-Set these deployment values:
-
-| Setting | Value |
-|---|---|
-| Node.js | `22.13.0` or newer (required for `node:sqlite`) |
-| Build command | `npm ci` (when `package-lock.json` is present), then `npm run build` |
-| Start command | `npm start` |
-| `HOST` | `0.0.0.0` |
-| `PORT` | supplied by the host platform |
-| `NODE_ENV` | `production` |
-| `DATABASE_PATH` | a writable persistent-volume path, for example `/var/lib/ooda/ooda.sqlite` |
-| `STATIC_DIR` | leave unset (defaults to `./dist/web`) |
-| `COOKIE_SECURE` | `true` behind HTTPS |
-| `TRUST_PROXY` | `true` only when the host supplies `X-Forwarded-For` |
-
-Configure `AI_PROVIDER` and only that provider's server-side credential variables in the deployment environment. Do not put `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or any other AI secret in frontend files or build-time browser variables. SQLite is local to one running instance: use one application instance with a persistent volume, and back up that volume. It is not appropriate for stateless/serverless functions or horizontally scaled replicas sharing no filesystem.
-
-## Troubleshooting
-
-| Symptom | Likely cause and fix |
-|---|---|
-| `Cannot find module 'node:sqlite'` or the server will not start | Node is older than 22.13. Upgrade Node. |
-| You sign in but are immediately signed out (production) | `COOKIE_SECURE` is true but you are on plain `http://`. Serve over HTTPS, or set `COOKIE_SECURE=false` for a private test. |
-| "No AI provider is configured" | Set `AI_PROVIDER` and its variables in `.env`, then restart. |
-| Run ends **Partial** with "analysis is unavailable" | Evidence was saved; fix the provider settings and press **Retry run**. |
-| A page is "skipped" with a robots.txt message | The site disallows automated access to that page. OODA will not fetch it. |
-| "Address points to a private or reserved network" | By design. Only public sites can be tracked. |
-| "The page had almost no readable text" | The page renders with JavaScript. OODA reads server-rendered HTML only. Track a different page. |
-| Behind a proxy every user shares one rate limit | Set `TRUST_PROXY=true` and make the proxy set `X-Forwarded-For`. |
-
-## Known limitations
-
-See the end of [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). In short: scheduled monitoring, team workspaces, notifications, a multi-agent "boardroom" analysis, and server-side PDF export are not built yet.
+- **Quote Verification**: Facts must include quotes that match the scraped text verbatim (squashed for whitespace/punctuation). If quotes don't match, facts are demoted to interpretations or hypotheses.
+- **No False Changes on Baseline**: First-time snapshots are marked as `baseline`. Change signals are strictly refused unless historical diff lines are present.
+- **Untrusted Input Isolation**: Scraped web pages are treated strictly as untrusted data using random nonces (`<<<EVIDENCE nonce=...>>>`). Prompt injection instructions inside scraped pages are disregarded.
+- **Final Validation**: All agent outputs pass through `extractJson()` and `validateAnalysis()`. Individual agents cannot write directly to the database.

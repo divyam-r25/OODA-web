@@ -15,8 +15,10 @@ services:
       - key: ALLOW_REGISTRATION
         value: true
       - key: AI_PROVIDER
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
+        value: openrouter_free
+      - key: AI_WORKFLOW
+        value: single
+      - key: OPENROUTER_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b:free
+      - key: OPENROUTER_API_KEY
         sync: false
