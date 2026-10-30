@@ -159,3 +159,28 @@ npm run dev
 - **No False Changes on Baseline**: First-time snapshots are marked as `baseline`. Change signals are strictly refused unless historical diff lines are present.
 - **Untrusted Input Isolation**: Scraped web pages are treated strictly as untrusted data using random nonces (`<<<EVIDENCE nonce=...>>>`). Prompt injection instructions inside scraped pages are disregarded.
 - **Final Validation**: All agent outputs pass through `extractJson()` and `validateAnalysis()`. Individual agents cannot write directly to the database.
+
+---
+
+## Render backend with Vercel frontend
+
+Render remains the only production application service: it runs the Node server, SQLite database, research worker, and AI integrations. Vercel serves only the compiled React files in `dist/web`; it does not run `dist/server`, create a database, or start a worker.
+
+The root [vercel.json](vercel.json) sends browser requests for `/api/*` to the Render service before applying the SPA fallback. Because the browser calls relative `/api/...` paths, Vercel proxies the request and response without exposing AI or database credentials to the frontend. This includes request methods, JSON bodies, query strings, and session cookies.
+
+### Vercel setup
+
+1. Import this repository as a Vercel project. Framework preset: **Other**; root directory: repository root.
+2. Leave Vercel's install and build settings to the committed configuration: `npm ci` and `npm run build`; output directory: `dist/web`.
+3. Edit `vercel.json` and replace `REPLACE_WITH_RENDER_HOST` with the hostname of the existing Render web service. For example, if Render is `https://ooda-api.onrender.com`, the destination becomes `https://ooda-api.onrender.com/api/:path*`. Do not add a second `/api` suffix to the hostname.
+4. Deploy. Verify `/`, `/assets/...`, `/favicon.svg`, `/theme.js`, and a direct client route such as `/app/dashboard` load. Verify `/api/health` is proxied rather than returning HTML.
+
+### Render setup for Vercel access
+
+Do not change Render's build command, start command, database, worker, or AI configuration. Keep `COOKIE_SECURE=true` and `TRUST_PROXY=true` behind Render's HTTPS proxy. Add this one environment variable on Render, replacing the example with the exact Vercel production URL:
+
+```env
+TRUSTED_ORIGINS=https://your-vercel-project.vercel.app
+```
+
+Use comma-separated full origins only when more than one specific frontend is required, for example `https://your-vercel-project.vercel.app,https://preview.example.com`. Wildcards, paths, credentials, and arbitrary forwarded hosts are rejected. After configuring it, register or log in from the Vercel domain, refresh the page, start a research run, and confirm the same data is visible through Render: both domains use the same Render backend and database.

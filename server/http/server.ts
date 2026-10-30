@@ -29,7 +29,7 @@ export function createHttpServer(config: Config, router: Router, svc: Services):
         throw new HttpError(404, 'not_found', 'Not found. Has the web app been built? Run: npm run build');
       }
       rateLimit(`ip:${ip}`, 600, 60_000);
-      checkOrigin(req);
+      checkOrigin(req, config.trustedOrigins);
       const matched = router.match(req.method ?? 'GET', url.pathname);
       if (matched === null) throw new HttpError(404, 'not_found', 'Unknown API route.');
       if (matched === 'method') throw new HttpError(405, 'method_not_allowed', 'Method not allowed.');

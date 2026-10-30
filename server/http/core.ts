@@ -158,17 +158,22 @@ export async function readJson(req: IncomingMessage): Promise<unknown> {
 }
 
 /** Reject cross-site state-changing requests (defence in depth on top of SameSite=Lax). */
-export function checkOrigin(req: IncomingMessage) {
+export function checkOrigin(req: IncomingMessage, trustedOrigins: readonly string[] = []) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? 'GET')) return;
   const origin = req.headers.origin;
   if (!origin) return;
-  let host: string;
+  let normalized: string;
   try {
-    host = new URL(origin).host;
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error('invalid origin');
+    normalized = parsed.origin;
   } catch {
     throw new HttpError(403, 'bad_origin', 'Cross-site request blocked.');
   }
-  if (host !== req.headers.host) throw new HttpError(403, 'bad_origin', 'Cross-site request blocked.');
+  // Preserve direct same-host requests, and allow only explicitly configured proxy origins.
+  if (new URL(normalized).host !== req.headers.host && !trustedOrigins.includes(normalized)) {
+    throw new HttpError(403, 'bad_origin', 'Cross-site request blocked.');
+  }
 }
 
 export function clientIp(req: IncomingMessage, trustProxy: boolean): string {

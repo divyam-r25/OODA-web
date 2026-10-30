@@ -2,6 +2,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp, type App } from '../server/app.ts';
 import { loadConfig } from '../server/config.ts';
+import { checkOrigin, HttpError } from '../server/http/core.ts';
 
 describe('OODA Application Tests', () => {
   let app: App;
@@ -15,6 +16,8 @@ describe('OODA Application Tests', () => {
       NODE_ENV: 'test',
       AI_PROVIDER: 'mock',
       WORKER_ENABLED: 'false',
+      COOKIE_SECURE: 'true',
+      TRUSTED_ORIGINS: 'https://ooda.example.vercel.app',
     });
     app = createApp({ config, startWorker: false });
     const { url } = await app.listen();
@@ -46,6 +49,9 @@ describe('OODA Application Tests', () => {
     assert.equal(regRes.status, 201);
     const regCookie = regRes.headers.get('set-cookie');
     assert.ok(regCookie, 'Expected session cookie on registration');
+    assert.match(regCookie, /HttpOnly/);
+    assert.match(regCookie, /Secure/);
+    assert.match(regCookie, /SameSite=Lax/);
 
     // Login
     const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
@@ -62,5 +68,32 @@ describe('OODA Application Tests', () => {
   test('unauthorized access to competitors is blocked', async () => {
     const res = await fetch(`${baseUrl}/api/competitors`);
     assert.equal(res.status, 401);
+  });
+
+  test('allows the configured Vercel origin and rejects an untrusted origin', async () => {
+    const allowed = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://ooda.example.vercel.app' },
+      body: JSON.stringify({ name: 'Vercel User', email: `vercel_${Date.now()}@example.com`, password: 'StrongPassword123!' }),
+    });
+    assert.equal(allowed.status, 201);
+    const cookie = allowed.headers.get('set-cookie') ?? '';
+    assert.match(cookie, /ooda_sid=/);
+    const authenticated = await fetch(`${baseUrl}/api/competitors`, { headers: { Cookie: cookie.split(';')[0]! } });
+    assert.equal(authenticated.status, 200);
+
+    const rejected = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' },
+      body: JSON.stringify({ name: 'Evil User', email: `evil_${Date.now()}@example.com`, password: 'StrongPassword123!' }),
+    });
+    assert.equal(rejected.status, 403);
+  });
+
+  test('origin validation keeps direct same-host requests and rejects malformed origins', () => {
+    const req = { method: 'POST', headers: { host: 'localhost:8787', origin: 'https://localhost:8787' } } as never;
+    assert.doesNotThrow(() => checkOrigin(req));
+    const malformed = { method: 'POST', headers: { host: 'localhost:8787', origin: 'not an origin' } } as never;
+    assert.throws(() => checkOrigin(malformed), HttpError);
   });
 });
