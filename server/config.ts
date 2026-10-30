@@ -40,6 +40,7 @@ export interface Config {
     workflow: AiWorkflowMode;
     timeoutMs: number;
     ollamaBaseUrl: string;
+    ollamaProxyToken: string;
     ollamaModel: string;
     ollamaAnalystModel: string;
     ollamaStrategistModel: string;
@@ -104,6 +105,7 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}): Con
       workflow,
       timeoutMs: int(e.AI_TIMEOUT_MS, 120_000),
       ollamaBaseUrl: e.OLLAMA_BASE_URL ?? 'http://127.0.0.1:11434',
+      ollamaProxyToken: e.OLLAMA_PROXY_TOKEN ?? '',
       ollamaModel: e.OLLAMA_MODEL ?? '',
       ollamaAnalystModel: e.OLLAMA_ANALYST_MODEL ?? '',
       ollamaStrategistModel: e.OLLAMA_STRATEGIST_MODEL ?? '',

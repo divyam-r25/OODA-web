@@ -131,6 +131,22 @@ describe('Zero-Cost AI Infrastructure & Multi-Agent Tests', () => {
       }
     });
 
+    test('Ollama proxy token is sent only when configured', async () => {
+      const originalFetch = globalThis.fetch;
+      let capturedHeaders: Record<string, string> = {};
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+        return new Response(JSON.stringify({ message: { content: '{"status":"ok"}' } }), { status: 200 });
+      }) as typeof fetch;
+      try {
+        const client = createAiClient(loadConfig({ AI_PROVIDER: 'ollama', OLLAMA_BASE_URL: 'https://bridge.example', OLLAMA_MODEL: 'llama3.2', OLLAMA_PROXY_TOKEN: 'bridge-secret' }));
+        await client.generate('system', 'user');
+        assert.equal(capturedHeaders.Authorization, 'Bearer bridge-secret');
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     test('local Ollama model not found (404) returns clear actionable message', async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async () => {

@@ -110,7 +110,7 @@ export function createAiClient(config: Config): AiClient {
           try {
             const j = (await post(
               endpoint,
-              {},
+              a.ollamaProxyToken ? { Authorization: `Bearer ${a.ollamaProxyToken}` } : {},
               {
                 model: targetModel,
                 stream: false,

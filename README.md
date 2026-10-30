@@ -184,3 +184,30 @@ TRUSTED_ORIGINS=https://your-vercel-project.vercel.app
 ```
 
 Use comma-separated full origins only when more than one specific frontend is required, for example `https://your-vercel-project.vercel.app,https://preview.example.com`. Wildcards, paths, credentials, and arbitrary forwarded hosts are rejected. After configuring it, register or log in from the Vercel domain, refresh the page, start a research run, and confirm the same data is visible through Render: both domains use the same Render backend and database.
+
+---
+
+## Secure local Ollama bridge for Render
+
+Do not expose Ollama itself through Tailscale Funnel: its other routes can pull, create, or delete models. Instead, run the included loopback-only bridge on the Windows PC. It exposes only authenticated `POST /api/chat`, permits one generation at a time, and forwards only to local Ollama at `127.0.0.1:11434`.
+
+In PowerShell, create a long random token and start the bridge:
+
+```powershell
+$env:OLLAMA_PROXY_TOKEN = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 48 | ForEach-Object {[char]$_})
+npm run ollama:bridge
+```
+
+Keep the PowerShell window running, then publish only the bridge port with Tailscale Funnel. Consult the current Tailscale documentation for the exact command for your installed client; the target must be the loopback bridge, for example `http://127.0.0.1:11435`, never raw Ollama port `11434`. Restrict access to the generated HTTPS Funnel hostname where your Tailscale setup supports it.
+
+On Render, configure the existing backend only:
+
+```env
+AI_PROVIDER=ollama
+AI_WORKFLOW=multi_agent
+OLLAMA_BASE_URL=https://your-funnel-host.example
+OLLAMA_PROXY_TOKEN=the_same_48_or_more_character_token
+OLLAMA_MODEL=llama3.2
+```
+
+`OLLAMA_PROXY_TOKEN` is used only by the server-side Ollama adapter and is never sent to the Vercel frontend. Leave it blank for ordinary local development against `http://127.0.0.1:11434`; requests then remain unauthenticated exactly as before. The PC must remain powered on, connected to Tailscale, running Ollama and the bridge, and have enough resources for the selected model. If it disconnects, OODA preserves collected evidence and reports the AI step as unavailable.
