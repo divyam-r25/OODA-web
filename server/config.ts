@@ -34,6 +34,7 @@ export interface Config {
   sessionDays: number;
   allowRegistration: boolean;
   trustProxy: boolean;
+  trustedOrigins: string[];
   ai: {
     provider: AiProviderName;
     workflow: AiWorkflowMode;
@@ -81,6 +82,11 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}): Con
 
   const rawWorkflow = (e.AI_WORKFLOW ?? 'single').toLowerCase();
   const workflow: AiWorkflowMode = rawWorkflow === 'multi_agent' ? 'multi_agent' : 'single';
+  const trustedOrigins = (e.TRUSTED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map(normalizeTrustedOrigin);
 
   return {
     env: nodeEnv,
@@ -92,6 +98,7 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}): Con
     sessionDays: int(e.SESSION_DAYS, 14),
     allowRegistration: bool(e.ALLOW_REGISTRATION, true),
     trustProxy: bool(e.TRUST_PROXY, false),
+    trustedOrigins: [...new Set(trustedOrigins)],
     ai: {
       provider,
       workflow,
@@ -137,6 +144,20 @@ export function loadConfig(overrides: Partial<Record<string, string>> = {}): Con
       maxSourcesPerCompetitor: int(e.MAX_SOURCES_PER_COMPETITOR, 6),
     },
   };
+}
+
+/** Accept only explicit HTTP(S) origins; paths, credentials and wildcards are not valid. */
+export function normalizeTrustedOrigin(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`Invalid TRUSTED_ORIGINS entry: ${value}`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || (parsed.pathname !== '/' || parsed.search || parsed.hash)) {
+    throw new Error(`TRUSTED_ORIGINS entries must be bare http(s) origins: ${value}`);
+  }
+  return parsed.origin;
 }
 
 export function aiStatus(c: Config): {
