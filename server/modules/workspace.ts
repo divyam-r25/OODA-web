@@ -40,7 +40,21 @@ export function registerWorkspaceRoutes(r: Router) {
     return {
       account: u,
       profile: loadProfile(db, u.id),
-      ai: { provider: ai.provider, configured: ai.configured, model: ai.model, problem: ai.problem ?? null },
+      ai: {
+        provider: ai.provider,
+        configured: ai.configured,
+        model: ai.model,
+        workflow: ai.workflow,
+        isLocal: ai.isLocal,
+        isFree: ai.isFree,
+        problem: ai.problem ?? null,
+        roleModels: {
+          analyst: config.ai.provider === 'ollama' ? config.ai.ollamaAnalystModel : config.ai.openrouterAnalystModel,
+          strategist: config.ai.provider === 'ollama' ? config.ai.ollamaStrategistModel : config.ai.openrouterStrategistModel,
+          critic: config.ai.provider === 'ollama' ? config.ai.ollamaCriticModel : config.ai.openrouterCriticModel,
+          synthesizer: config.ai.provider === 'ollama' ? config.ai.ollamaSynthesisModel : config.ai.openrouterSynthesisModel,
+        },
+      },
       limits: config.limits,
       collection: { respectRobots: config.fetch.respectRobots, timeoutMs: config.fetch.timeoutMs, maxBytes: config.fetch.maxBytes },
     };

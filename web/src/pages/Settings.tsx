@@ -50,11 +50,60 @@ export function SettingsPage() {
         </form>
 
         <section className="sheet" aria-labelledby="ai-h">
-          <div className="sheet-head"><h2 id="ai-h">Analysis provider</h2>{d.ai.configured ? <Tag tone="ok">Connected</Tag> : <Tag tone="warn">Not configured</Tag>}</div>
+          <div className="sheet-head">
+            <h2 id="ai-h">Analysis provider</h2>
+            <div className="row wrap gap-sm">
+              {d.ai.configured ? <Tag tone="ok">Connected</Tag> : <Tag tone="warn">Not configured</Tag>}
+              {d.ai.isFree && <Tag tone="info">Zero-Cost ($0)</Tag>}
+              <Tag>{d.ai.workflow === 'multi_agent' ? 'Multi-Agent (4 Roles)' : 'Single Agent'}</Tag>
+            </div>
+          </div>
           <div className="sheet-pad stack">
-            {d.ai.configured ? <p style={{ margin: 0 }}>Reports are written by <b>{d.ai.provider}</b> using model <span className="mono">{d.ai.model}</span>.</p> : <Alert tone="warn">{d.ai.problem} Set the provider in the server’s environment and restart. Pages can still be collected without it.</Alert>}
-            {d.ai.provider === 'mock' && <Alert>The deterministic test provider is active. It builds output from the collected text without a language model, so use it for testing only.</Alert>}
-            <p className="small muted" style={{ margin: 0 }}>API keys live only in the server environment (see <span className="mono">.env.example</span>). They are never sent to your browser.</p>
+            {d.ai.configured ? (
+              <div className="stack-sm">
+                <p style={{ margin: 0 }}>
+                  Provider: <b>{d.ai.provider}</b> {d.ai.isLocal ? '(Local Inference)' : d.ai.isFree ? '(Hosted Free Tier)' : ''} · Default Model:{' '}
+                  <span className="mono">{d.ai.model}</span> · Workflow: <b>{d.ai.workflow === 'multi_agent' ? 'Multi-Agent Pipeline' : 'Single Agent'}</b>
+                </p>
+                {d.ai.workflow === 'multi_agent' && (
+                  <div className="card-sub pad-sm small muted stack-sm">
+                    <div><b>4-Role Sequential Workflow:</b></div>
+                    <div>1. <b>Research Analyst:</b> Extracts verified facts and exact quotes with evidence refs (E1, E2...).</div>
+                    <div>2. <b>Strategy Analyst:</b> Evaluates competitive implications and formulates recommendations.</div>
+                    <div>3. <b>Skeptical Reviewer:</b> Audits quotes, challenges unsupported claims, and flags baseline errors.</div>
+                    <div>4. <b>Lead Synthesizer:</b> Conservative conflict resolution into final verified OODA report.</div>
+                    {d.ai.roleModels && Object.values(d.ai.roleModels).some(Boolean) && (
+                      <div className="mono small">
+                        Role Models: Analyst: {d.ai.roleModels.analyst || d.ai.model} | Strategist: {d.ai.roleModels.strategist || d.ai.model} | Critic: {d.ai.roleModels.critic || d.ai.model} | Synthesis: {d.ai.roleModels.synthesizer || d.ai.model}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {d.ai.provider === 'ollama' && (
+                  <Alert>
+                    <b>Local Ollama Active:</b> Truly unlimited, zero-cost private inference. Ollama runs locally on your machine (<span className="mono">http://127.0.0.1:11434</span>).
+                    <br /><span className="small">Cloud Notice: If deployed on a cloud container (like Render), 127.0.0.1 refers to the container, not your personal computer. For cloud deployments, use <span className="mono">AI_PROVIDER=openrouter_free</span>.</span>
+                  </Alert>
+                )}
+                {d.ai.provider === 'openrouter_free' && (
+                  <Alert>
+                    <b>OpenRouter Free Active:</b> Zero-cost hosted inference for cloud deployments. Only models ending in <span className="mono">:free</span> (or <span className="mono">openrouter/free</span>) are permitted.
+                    <br /><span className="small">If the free-tier rate limit or quota is exhausted, collected evidence is preserved and runs stop safely with zero billing.</span>
+                  </Alert>
+                )}
+              </div>
+            ) : (
+              <Alert tone="warn">
+                <b>Configuration Issue:</b> {d.ai.problem}
+                <br /><span className="small">Set your provider in the server environment (<span className="mono">.env</span>) and restart. Pages can still be collected and stored without AI.</span>
+              </Alert>
+            )}
+            {d.ai.provider === 'mock' && (
+              <Alert>The deterministic test provider is active. It builds output from the collected text without a language model, so use it for testing only.</Alert>
+            )}
+            <p className="small muted" style={{ margin: 0 }}>
+              All API keys and provider endpoints live strictly in the server environment (see <span className="mono">.env.example</span>). Secrets are never sent to your browser.
+            </p>
           </div>
         </section>
 
