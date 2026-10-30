@@ -58,7 +58,7 @@ export function useQuery(): [URLSearchParams, (patch: Record<string, string | nu
   return [params, set];
 }
 
-type LinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & { to: string; exact?: boolean };
+type LinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'prefix'> & { to: string; exact?: boolean };
 export function Link({ to, onClick, children, ...rest }: LinkProps) {
   const { navigate } = useRouter();
   return (

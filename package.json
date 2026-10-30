@@ -10,7 +10,7 @@
     "build": "node scripts/build.mjs",
     "start": "node --env-file-if-exists=.env dist/server/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1",
     "test:e2e": "node --import tsx tests/e2e/run.mjs",
     "check": "npm run typecheck && npm test && npm run build"
   },

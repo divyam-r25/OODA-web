@@ -4,8 +4,6 @@ Competitive intelligence for founders and product teams. OODA watches the public
 
 OODA is a responsive web application (desktop, tablet and phone browsers) with its own backend.
 
-![Report view](docs/assets/screens/08-report.png)
-
 ## What it does
 
 - **Observe.** Collects the pages you choose (pricing, product, careers) with a polite, SSRF-safe fetcher that respects `robots.txt`, and stores dated snapshots.
@@ -21,7 +19,9 @@ Requires **Node.js 22.13 or newer** (uses the built-in `node:sqlite`).
 
 ```bash
 npm install
-cp .env.example .env        # then edit: choose an AI provider (see below)
+# PowerShell: Copy-Item .env.example .env
+# macOS/Linux: cp .env.example .env
+# Then edit .env to choose an AI provider (see below).
 npm run build
 npm start                   # http://127.0.0.1:8787
 ```
@@ -31,6 +31,8 @@ Development with rebuild-on-change and server restart:
 ```bash
 npm run dev
 ```
+
+`npm run dev` creates an initial build, watches the TypeScript, React and CSS sources, and restarts the Node server whenever the backend bundle changes. It serves the same compiled frontend and API from one origin at `http://127.0.0.1:8787`; do not open the `web/` directory directly.
 
 Open the site, choose **Create a workspace**, add a competitor, and press **Research now**.
 
@@ -55,8 +57,8 @@ Keys stay in the server environment. The Settings page shows whether a provider 
 | `npm start` | Runs the production build (loads `.env`) |
 | `npm run dev` | Dev mode: rebuilds the web bundle and restarts the server on change |
 | `npm run typecheck` | `tsc --noEmit` over shared, server, web, tests |
-| `npm test` | 58 server tests: unit, API, research lifecycle, provider adapters |
-| `npm run test:e2e` | Browser walkthrough in Chromium (needs `npm run build` first and `npx playwright install chromium`) |
+| `npm test` | Runs the checked-in Node/TypeScript tests. (The repository currently contains no test files.) |
+| `npm run test:e2e` | Legacy Playwright command; it requires a `tests/e2e/run.mjs` file, which is not included in this checkout. |
 | `npm run check` | typecheck, then tests, then build |
 
 ## Repository layout
@@ -65,15 +67,32 @@ Keys stay in the server environment. The Settings page shows whether a provider 
 shared/    validation library and report types shared by server and web
 server/    HTTP API, SQLite, auth, research pipeline, queue and worker, AI adapters, collection
 web/       React 19 + TypeScript single-page app, bundled with esbuild
-tests/     node:test suites and a Playwright end-to-end walkthrough
-docs/      implementation plan, architecture, deployment, acceptance results
 ```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), and [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) (what was verified and what was not).
 
 ## Health check
 
 `GET /api/health` returns database, worker and provider status without authentication.
+
+## Production deployment
+
+Build and run this as a single Node.js 22.13+ service. The build command is `npm run build`; the start command is `npm start`. The server serves `dist/web/` itself and exposes the API at the same origin under `/api/`, so no frontend deployment, reverse-proxy rewrite, or browser-visible environment variables are needed.
+
+Set these deployment values:
+
+| Setting | Value |
+|---|---|
+| Node.js | `22.13.0` or newer (required for `node:sqlite`) |
+| Build command | `npm ci` (when `package-lock.json` is present), then `npm run build` |
+| Start command | `npm start` |
+| `HOST` | `0.0.0.0` |
+| `PORT` | supplied by the host platform |
+| `NODE_ENV` | `production` |
+| `DATABASE_PATH` | a writable persistent-volume path, for example `/var/lib/ooda/ooda.sqlite` |
+| `STATIC_DIR` | leave unset (defaults to `./dist/web`) |
+| `COOKIE_SECURE` | `true` behind HTTPS |
+| `TRUST_PROXY` | `true` only when the host supplies `X-Forwarded-For` |
+
+Configure `AI_PROVIDER` and only that provider's server-side credential variables in the deployment environment. Do not put `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or any other AI secret in frontend files or build-time browser variables. SQLite is local to one running instance: use one application instance with a persistent volume, and back up that volume. It is not appropriate for stateless/serverless functions or horizontally scaled replicas sharing no filesystem.
 
 ## Troubleshooting
 
