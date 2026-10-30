@@ -147,6 +147,42 @@ describe('Zero-Cost AI Infrastructure & Multi-Agent Tests', () => {
       }
     });
 
+    test('Ollama proxy token is never included in provider errors', async () => {
+      const originalFetch = globalThis.fetch;
+      const secret = 'bridge-secret-must-not-appear';
+      globalThis.fetch = (async () => { throw new Error(`connection rejected for ${secret}`); }) as typeof fetch;
+      try {
+        const client = createAiClient(loadConfig({ AI_PROVIDER: 'ollama', OLLAMA_BASE_URL: 'https://bridge.example', OLLAMA_MODEL: 'llama3.2', OLLAMA_PROXY_TOKEN: secret }));
+        await assert.rejects(() => client.generate('system', 'user'), (error: Error) => {
+          assert.ok(error instanceof AiError);
+          assert.doesNotMatch(error.message, new RegExp(secret));
+          return true;
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    test('Ollama keeps role-specific model selection with proxy authentication', async () => {
+      const originalFetch = globalThis.fetch;
+      const models: string[] = [];
+      globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+        models.push(JSON.parse(String(init?.body)).model);
+        assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer bridge-secret');
+        return new Response(JSON.stringify({ message: { content: '{"status":"ok"}' } }), { status: 200 });
+      }) as typeof fetch;
+      try {
+        const client = createAiClient(loadConfig({
+          AI_PROVIDER: 'ollama', AI_WORKFLOW: 'multi_agent', OLLAMA_BASE_URL: 'https://bridge.example', OLLAMA_PROXY_TOKEN: 'bridge-secret', OLLAMA_MODEL: 'default',
+          OLLAMA_ANALYST_MODEL: 'analyst', OLLAMA_STRATEGIST_MODEL: 'strategist', OLLAMA_CRITIC_MODEL: 'critic', OLLAMA_SYNTHESIS_MODEL: 'synthesizer',
+        }));
+        for (const role of ['analyst', 'strategist', 'critic', 'synthesizer'] as const) await client.generate('system', 'user', role);
+        assert.deepEqual(models, ['analyst', 'strategist', 'critic', 'synthesizer']);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     test('local Ollama model not found (404) returns clear actionable message', async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = (async () => {
