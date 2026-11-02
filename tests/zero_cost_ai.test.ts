@@ -91,6 +91,7 @@ describe('Zero-Cost AI Infrastructure & Multi-Agent Tests', () => {
           AI_PROVIDER: 'ollama',
           OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
           OLLAMA_MODEL: 'llama3.2',
+          OLLAMA_PROXY_TOKEN: '',
         });
         const client = createAiClient(config);
         const res = await client.generate('test system', 'test user');
@@ -115,6 +116,7 @@ describe('Zero-Cost AI Infrastructure & Multi-Agent Tests', () => {
           AI_PROVIDER: 'ollama',
           OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
           OLLAMA_MODEL: 'llama3.2',
+          OLLAMA_PROXY_TOKEN: '',
         });
         const client = createAiClient(config);
         await assert.rejects(

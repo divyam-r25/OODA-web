@@ -26,15 +26,43 @@ async function post(
   timeoutMs: number,
   providerLabel = 'AI provider',
 ): Promise<unknown> {
-  let res: Response;
   try {
-    res = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
+
+    if (!res.ok) {
+      const text = (await res.text().catch(() => '')).slice(0, 400);
+
+      // Authentication failure
+      if (res.status === 401) {
+        throw new AiError('auth_error', `Authentication failed for ${providerLabel}. Please check your API key.`, false);
+      }
+
+      // Quota or rate limit exhaustion (429, 402, or quota messages)
+      if (res.status === 429 || res.status === 402 || /quota|credit|rate[- ]limit|exhaust/i.test(text)) {
+        throw new AiError(
+          'quota_exhausted',
+          `${providerLabel} free quota or rate limit reached. Evidence has been preserved. Please wait a few moments before retrying.`,
+          false, // Crucial: quota exhaustion is NOT retryable automatically to avoid spamming
+        );
+      }
+
+      // Model not found in Ollama (404)
+      if (res.status === 404 && /model.*not found/i.test(text)) {
+        throw new AiError('unconfigured', `${providerLabel} error: ${text}. Try pulling the model first with 'ollama pull <model>'.`, false);
+      }
+
+      const retryable = res.status >= 500;
+      throw new AiError('http', `${providerLabel} returned ${res.status}${text ? `: ${text}` : ''}`, retryable);
+    }
+
+    return await res.json();
   } catch (e) {
+    if (e instanceof AiError) throw e;
     const name = (e as Error).name;
     if (name === 'TimeoutError' || name === 'AbortError') {
       throw new AiError('timeout', `The ${providerLabel} took too long to respond (timeout after ${Math.round(timeoutMs / 1000)}s).`, true);
@@ -42,34 +70,6 @@ async function post(
     const causeMsg = (e as Error).cause ? String(((e as Error).cause as Error).message) : (e as Error).message;
     throw new AiError('network', `Could not reach ${providerLabel} (${causeMsg}).`, true);
   }
-
-  if (!res.ok) {
-    const text = (await res.text().catch(() => '')).slice(0, 400);
-
-    // Authentication failure
-    if (res.status === 401) {
-      throw new AiError('auth_error', `Authentication failed for ${providerLabel}. Please check your API key.`, false);
-    }
-
-    // Quota or rate limit exhaustion (429, 402, or quota messages)
-    if (res.status === 429 || res.status === 402 || /quota|credit|rate[- ]limit|exhaust/i.test(text)) {
-      throw new AiError(
-        'quota_exhausted',
-        `${providerLabel} free quota or rate limit reached. Evidence has been preserved. Please wait a few moments before retrying.`,
-        false, // Crucial: quota exhaustion is NOT retryable automatically to avoid spamming
-      );
-    }
-
-    // Model not found in Ollama (404)
-    if (res.status === 404 && /model.*not found/i.test(text)) {
-      throw new AiError('unconfigured', `${providerLabel} error: ${text}. Try pulling the model first with 'ollama pull <model>'.`, false);
-    }
-
-    const retryable = res.status >= 500;
-    throw new AiError('http', `${providerLabel} returned ${res.status}${text ? `: ${text}` : ''}`, retryable);
-  }
-
-  return res.json();
 }
 
 export function createAiClient(config: Config): AiClient {
